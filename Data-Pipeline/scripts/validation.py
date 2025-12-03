@@ -12,10 +12,8 @@ logger = logging.getLogger(__name__)
 def check_data_types(df: pd.DataFrame) -> Dict[str, Any]:
     """Validate data types"""
     expected_types = {
-        'review_id': 'object',
-        'rating': 'int64',
-        'text': 'object',
-        'useful_votes': 'int64'
+        'reviewRating': 'int64',
+        'reviewText': 'object',
     }
     
     type_check_results = {}
@@ -36,11 +34,11 @@ def check_data_ranges(df: pd.DataFrame) -> Dict[str, Any]:
     
     # Check rating range
     if 'rating' in df.columns:
-        range_checks['rating'] = {
-            'min': df['rating'].min(),
-            'max': df['rating'].max(),
-            'valid': (df['rating'].min() >= 1) and (df['rating'].max() <= 5),
-            'out_of_range_count': len(df[(df['rating'] < 1) | (df['rating'] > 5)])
+        range_checks['reviewRating'] = {
+            'min': df['reviewRating'].min(),
+            'max': df['reviewRating'].max(),
+            'valid': (df['reviewRating'].min() >= 1) and (df['reviewRating'].max() <= 5),
+            'out_of_range_count': len(df[(df['rating'] < 1) | (df['reviewRating'] > 5)])
         }
     
     # Check text length
@@ -50,13 +48,6 @@ def check_data_ranges(df: pd.DataFrame) -> Dict[str, Any]:
             'max': df['text_length'].max(),
             'mean': df['text_length'].mean(),
             'empty_count': len(df[df['text_length'] == 0])
-        }
-    
-    # Check votes are non-negative
-    if 'useful_votes' in df.columns:
-        range_checks['useful_votes'] = {
-            'negative_count': len(df[df['useful_votes'] < 0]),
-            'valid': (df['useful_votes'] >= 0).all()
         }
     
     return range_checks
@@ -80,14 +71,14 @@ def check_missing_values(df: pd.DataFrame) -> Dict[str, Any]:
 def check_duplicates(df: pd.DataFrame) -> Dict[str, Any]:
     """Check for duplicate records"""
     duplicate_report = {
-        'duplicate_review_ids': len(df[df.duplicated(subset=['review_id'], keep=False)]),
-        'duplicate_texts': len(df[df.duplicated(subset=['text'], keep=False)]),
+        'duplicate_review_ids': len(df[df.duplicated(subset=['authorName'], keep=False)]),
+        'duplicate_texts': len(df[df.duplicated(subset=['reviewText'], keep=False)]),
         'exact_duplicates': len(df[df.duplicated(keep=False)])
     }
     
     return duplicate_report
 
-def validate_data(input_path: str = 'data/processed/clean_reviews.csv') -> Dict[str, Any]:
+def validate_data(input_path: str = 'data/processed/features_apify.csv') -> Dict[str, Any]:
     """Main validation pipeline"""
     try:
         # Load data

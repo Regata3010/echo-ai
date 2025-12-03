@@ -179,4 +179,4 @@ def detect_anomalies(input_path: str) -> Dict[str, Any]:
 
 
 if __name__ == "__main__":
-    detect_anomalies("data/processed/clean_reviews.csv")
+    detect_anomalies("data/processed/features_apify.csv")

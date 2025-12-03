@@ -33,49 +33,49 @@ def main():
     
     try:
         # Step 1: Check if data exists, if not generate it
-        print("\n📊 Step 1: Data Acquisition")
-        if not os.path.exists('data/raw/synthetic_reviews.csv'):
+        print("\n Step 1: Data Acquisition")
+        if not os.path.exists('data/raw/dataset_restaurant-review-aggregator_2025-11-22_23-47-46-681.csv'):
             print("Generating synthetic data...")
             df = generate_synthetic_reviews(5000)
             save_data(df)
         
         # Acquire data
         df = acquire_data()
-        print(f"✓ Loaded {len(df)} reviews")
+        print(f" Loaded {len(df)} reviews")
         
         # Step 2: Preprocessing
-        print("\n🔧 Step 2: Data Preprocessing")
+        print("\n Step 2: Data Preprocessing")
         df_processed = preprocess_data()
-        print(f"✓ Preprocessed data saved")
+        print(f" Preprocessed data saved")
         
         # Step 3: Feature Engineering
-        print("\n⚙️ Step 3: Feature Engineering")
+        print("\n Step 3: Feature Engineering")
         df_features = create_features()
         print(f"✓ Features created")
         
         # Step 4: Validation
-        print("\n✅ Step 4: Data Validation")
+        print("\n Step 4: Data Validation")
         validation_results = validate_data()
         if validation_results['validation_passed']:
-            print("✓ Validation passed")
+            print(" Validation passed")
         else:
-            print(f"⚠️ Validation issues: {validation_results['issues']}")
+            print(f" Validation issues: {validation_results['issues']}")
         
         # Step 5: Anomaly Detection
-        print("\n🔍 Step 5: Anomaly Detection")
-        anomalies = detect_anomalies()
-        print(f"✓ Anomaly detection complete")
+        print("\n Step 5: Anomaly Detection")
+        anomalies = detect_anomalies("data/processed/features_apify.csv")
+        print(f" Anomaly detection complete")
         
         # Step 6: Bias Detection
-        print("\n⚖️ Step 6: Bias Analysis")
-        bias_report = detect_and_report_bias()
+        print("\n Step 6: Bias Analysis")
+        bias_report = detect_and_report_bias("data/processed/features_apify.csv")
         print("✓ Bias report generated")
         
         print("\n" + "="*60)
-        print("✨ Pipeline completed successfully!")
+        print(" Pipeline completed successfully!")
         print("="*60)
         
-        print("\n📁 Output files generated:")
+        print("\n Output files generated:")
         print("  - data/processed/clean_reviews.csv")
         print("  - data/processed/features.csv")
         print("  - data/metrics/validation_results.json")
@@ -83,7 +83,7 @@ def main():
         
     except Exception as e:
         logger.error(f"Pipeline failed: {e}")
-        print(f"\n❌ Pipeline failed: {e}")
+        print(f"\n Pipeline failed: {e}")
         raise
 
 if __name__ == "__main__":

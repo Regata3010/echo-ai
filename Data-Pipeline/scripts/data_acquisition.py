@@ -15,7 +15,7 @@ def acquire_data(source='local'):
     try:
         if source == 'local':
             # Use generated synthetic data
-            filepath = 'data/raw/synthetic_reviews.csv'
+            filepath = 'data/raw/dataset_restaurant-review-aggregator_2025-11-22_23-47-46-681.csv'
             
             if not os.path.exists(filepath):
                 logger.warning(f"Data file not found. Generating synthetic data...")

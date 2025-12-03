@@ -18,7 +18,7 @@ def analyze_rating_distribution(df: pd.DataFrame) -> Dict[str, Any]:
         'median_rating': df['reviewRating'].median(),
         'std_rating': df['reviewRating'].std(),
         'skewness': df['reviewRating'].skew(),
-        'positive_ratio': (df['rareviewRatingting'] >= 4).mean(),
+        'positive_ratio': (df['reviewRating'] >= 4).mean(),
         'negative_ratio': (df['reviewRating'] <= 2).mean(),
         'neutral_ratio': (df['reviewRating'] == 3).mean()
     }
@@ -46,8 +46,8 @@ def analyze_categorical_bias(df: pd.DataFrame, category_col: str) -> Dict[str, A
         category_analysis[str(category)] = {
             'count': len(category_df),
             'percentage': (len(category_df) / len(df)) * 100,
-            'avg_rating': category_df['rating'].mean(),
-            'rating_std': category_df['rating'].std()
+            'avg_rating': category_df['reviewRating'].mean(),
+            'rating_std': category_df['reviewRating'].std()
         }
     
     # Check for category imbalance
@@ -70,10 +70,10 @@ def analyze_temporal_bias(df: pd.DataFrame) -> Dict[str, Any]:
         return {}
     
     df['reviewDate'] = pd.to_datetime(df['reviewDate'])
-    df['month'] = df['date'].dt.to_period('M')
+    df['month'] = df['reviewDate'].dt.to_period('M')
     
     temporal_analysis = df.groupby('month').agg({
-        'rating': ['mean', 'std', 'count']
+        'reviewRating': ['mean', 'std', 'count']
     })
     
     return {

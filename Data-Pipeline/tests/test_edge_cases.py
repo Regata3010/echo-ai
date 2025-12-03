@@ -1,4 +1,5 @@
-# Data-Pipeline/tests/test_edge_cases.py
+# Data-Pipeline/tests/test_bias_edge_cases.py
+
 import sys
 import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -6,53 +7,101 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import pandas as pd
 import numpy as np
 
-def test_empty_dataframe():
-    """Test with empty dataframe"""
-    df = pd.DataFrame()
-    assert len(df) == 0
-    assert df.empty == True
-    print("✓ Empty dataframe test passed")
+from scripts.bias_detection import (
+    analyze_rating_distribution,
+    analyze_categorical_bias,
+    analyze_temporal_bias,
+    analyze_text_length_bias
+)
 
-def test_single_row():
-    """Test with single row"""
-    df = pd.DataFrame({'col': [1]})
-    assert len(df) == 1
-    assert not df.empty
-    print("✓ Single row test passed")
+def test_empty_rating_distribution():
+    """Test rating distribution with empty dataframe"""
+    df = pd.DataFrame(columns=["reviewRating"])
+    result = analyze_rating_distribution(df)
+    assert isinstance(result, dict)
+    print(" Empty rating distribution test passed")
 
-def test_large_values():
-    """Test with extreme values"""
+
+def test_single_rating():
+    """Test with a single review rating"""
+    df = pd.DataFrame({"reviewRating": [5]})
+    result = analyze_rating_distribution(df)
+    assert result["mean_rating"] == 5
+    assert result["median_rating"] == 5
+    print(" Single rating test passed")
+
+
+
+def test_categorical_missing_column():
+    """Test categorical bias when column does not exist"""
+    df = pd.DataFrame({"reviewRating": [5, 4, 3]})
+    result = analyze_categorical_bias(df, "placeName")
+    assert result == {}
+    print(" Missing categorical column test passed")
+
+
+def test_categorical_basic():
+    """Test simple categorical bias detection"""
     df = pd.DataFrame({
-        'large_num': [1e10, 1e15, 1e20],
-        'small_num': [1e-10, 1e-15, 1e-20]
+        "placeName": ["A", "A", "B"],
+        "rating": [5, 4, 3]
     })
-    assert df['large_num'].max() == 1e20
-    assert df['small_num'].min() == 1e-20
-    print("✓ Large values test passed")
+    result = analyze_categorical_bias(df, "placeName")
+    assert "A" in result["categories"]
+    assert "B" in result["categories"]
+    print(" Basic categorical bias test passed")
 
-def test_special_characters():
-    """Test with special characters"""
-    special_chars = "!@#$%^&*()_+-=[]{}|;':\",./<>?"
-    df = pd.DataFrame({'text': [special_chars]})
-    assert len(df['text'][0]) == len(special_chars)
-    print("✓ Special characters test passed")
+def test_temporal_missing_column():
+    """Test temporal bias when reviewDate does not exist"""
+    df = pd.DataFrame({"reviewRating": [5, 4, 3]})
+    result = analyze_temporal_bias(df)
+    assert result == {}
+    print(" Temporal bias missing column test passed")
 
-def test_null_handling():
-    """Test null value handling"""
+
+def test_temporal_simple():
+    """Test temporal bias with valid dates"""
     df = pd.DataFrame({
-        'col1': [1, None, 3],
-        'col2': [None, None, None],
-        'col3': [1, 2, 3]
+        "reviewDate": ["2024-01-01", "2024-01-15", "2024-02-01"],
+        "rating": [5, 4, 3]
     })
-    assert df['col1'].isnull().sum() == 1
-    assert df['col2'].isnull().all()
-    assert df['col3'].notnull().all()
-    print("✓ Null handling test passed")
+    result = analyze_temporal_bias(df)
+    assert "monthly_trend" in result
+    print(" Basic temporal bias test passed")
+
+
+
+def test_text_length_missing_column():
+    """Test text-length bias when column is missing"""
+    df = pd.DataFrame({"reviewRating": [5, 4, 3]})
+    result = analyze_text_length_bias(df)
+    assert result == {}
+    print(" Missing text_length column test passed")
+
+
+def test_text_length_basic():
+    """Test text length bias with short and long reviews"""
+    df = pd.DataFrame({
+        "text_length": [5, 10, 200],
+        "reviewRating": [3, 4, 5]
+    })
+    result = analyze_text_length_bias(df)
+    assert "short_reviews_count" in result
+    assert "long_reviews_count" in result
+    print(" Basic text length bias test passed")
+
 
 if __name__ == "__main__":
-    test_empty_dataframe()
-    test_single_row()
-    test_large_values()
-    test_special_characters()
-    test_null_handling()
-    print("\n✅ All edge case tests passed!")
+    test_empty_rating_distribution()
+    test_single_rating()
+
+    test_categorical_missing_column()
+    test_categorical_basic()
+
+    test_temporal_missing_column()
+    test_temporal_simple()
+
+    test_text_length_missing_column()
+    test_text_length_basic()
+
+    print("\n All bias detection edge case tests passed!")
