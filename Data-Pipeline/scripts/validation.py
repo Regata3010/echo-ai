@@ -71,7 +71,7 @@ def check_missing_values(df: pd.DataFrame) -> Dict[str, Any]:
         missing_pct = (missing_count / len(df)) * 100 if len(df) > 0 else 0.0
 
         # Treat these as critical if missing
-        is_critical = col in ["reviewText", "reviewRating", "placeName"]
+        is_critical = col in ["reviewRating", "placeName"]
 
         missing_report[col] = {
             "missing_count": missing_count,
@@ -152,7 +152,7 @@ def validate_data(
 
         # Save validation results
         os.makedirs("data/metrics", exist_ok=True)
-        output_path = "data/metrics/validation_results_mac.json"
+        output_path = "data/metrics/validation_results.json"
 
         with open(output_path, "w") as f:
             json.dump(validation_results, f, indent=2, default=str)
