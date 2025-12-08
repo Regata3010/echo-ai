@@ -41,8 +41,8 @@ def compute_restaurant_avg(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 def create_features(
-    input_path: str = "echo-ai/data/raw/clean_apify_processed.csv",
-    output_path: str = "echo-ai/data/raw/featurecleaned_apify_processed.csv"
+    input_path: str = "../../data/raw/clean_apify_processed.csv",
+    output_path: str = "../../data/raw/featurecleaned_apify_processed.csv"
 ) -> pd.DataFrame:
 
     try:
