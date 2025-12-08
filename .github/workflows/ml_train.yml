@@ -60,7 +60,7 @@ jobs:
             PASSED=$(python -c "import json; data=json.load(open('data/metrics/validation_results.json')); print(data.get('validation_passed', False))")
             echo "passed=$PASSED" >> $GITHUB_OUTPUT
             
-            if [ "$PASSED" != "True" ]; then
+            if [ "$PASSED" = "False" ]; then
               echo "[ERROR] Data validation failed"
               exit 1
             fi
@@ -78,7 +78,7 @@ jobs:
     name: Train ML Model
     runs-on: ubuntu-latest
     needs: data-preprocessing
-    if: needs.data-preprocessing.outputs.preprocessing-passed == 'True'
+    if: needs.data-preprocessing.outputs.preprocessing-passed == 'true'
     
     outputs:
       model-trained: ${{ steps.training.outputs.success }}
