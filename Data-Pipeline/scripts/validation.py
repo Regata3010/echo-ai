@@ -117,7 +117,7 @@ def validate_data(input_path: str = '../../data/raw/featurecleaned_apify_process
         
         # Save validation results
         os.makedirs('data/metrics', exist_ok=True)
-        output_path = 'data/metrics/validation_results.json'
+        output_path = 'data/metrics/validation_results_mac.json'
         with open(output_path, 'w') as f:
             json.dump(validation_results, f, indent=2, default=str)
         
