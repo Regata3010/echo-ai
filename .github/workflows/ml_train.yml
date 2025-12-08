@@ -6,7 +6,7 @@ on:
     paths:
       - 'Model-Pipeline/**'
       - 'Data-Pipeline/**'
-      - 'data/raw/apify_data.csv'
+      - 'data/raw/apify_unprocessed.csv'
       - 'requirements.txt'
   workflow_dispatch:
 
@@ -56,11 +56,11 @@ jobs:
           cd Data-Pipeline/scripts
           python validation.py
           
-          if [ -f "../../data/metrics/validation_results.json" ]; then
-            PASSED=$(python -c "import json; data=json.load(open('../../data/metrics/validation_results.json')); print(data.get('validation_passed', False))")
+          if [ -f "data/metrics/validation_results.json" ]; then
+            PASSED=$(python -c "import json; data=json.load(open('data/metrics/validation_results.json')); print(data.get('validation_passed', False))")
             echo "passed=$PASSED" >> $GITHUB_OUTPUT
             
-            if [ "$PASSED" = "False" ]; then
+            if [ "$PASSED" != "True" ]; then
               echo "[ERROR] Data validation failed"
               exit 1
             fi
@@ -78,7 +78,7 @@ jobs:
     name: Train ML Model
     runs-on: ubuntu-latest
     needs: data-preprocessing
-    if: needs.data-preprocessing.outputs.preprocessing-passed == 'true'
+    if: needs.data-preprocessing.outputs.preprocessing-passed == 'True'
     
     outputs:
       model-trained: ${{ steps.training.outputs.success }}
