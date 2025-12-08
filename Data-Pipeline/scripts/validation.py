@@ -78,7 +78,7 @@ def check_duplicates(df: pd.DataFrame) -> Dict[str, Any]:
     
     return duplicate_report
 
-def validate_data(input_path: str = 'data/processed/features_apify.csv') -> Dict[str, Any]:
+def validate_data(input_path: str = '../../data/raw/featurecleaned_apify_processed.csv') -> Dict[str, Any]:
     """Main validation pipeline"""
     try:
         # Load data
