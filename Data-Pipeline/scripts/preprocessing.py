@@ -59,8 +59,8 @@ def handle_missing_values(df: pd.DataFrame) -> pd.DataFrame:
     logger.info(f"Missing values after handling: {df.isnull().sum().sum()}")
     return df
 
-def preprocess_data(input_path: str = '../../data/raw/apify_unprocessed.csv',
-                   output_path: str = '../../raw/clean_apify_processed.csv') -> pd.DataFrame:
+def preprocess_data(input_path: str = 'data/raw/apify_unprocessed.csv',
+                   output_path: str = 'data/raw/clean_apify_processed.csv') -> pd.DataFrame:
     """Main preprocessing pipeline"""
     try:
         # Load data
