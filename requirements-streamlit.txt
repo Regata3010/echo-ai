@@ -1,3 +1,34 @@
+# # Streamlit and UI
+# streamlit==1.29.0
+# plotly==5.18.0
+
+# # Core ML libraries
+# scikit-learn==1.5.1
+# pandas==2.2.2
+# numpy==1.26.4
+
+# # NLP processing
+# nltk==3.9.1
+
+# # Model tracking (lightweight)
+# mlflow==2.16.2
+
+# # Visualization
+# matplotlib==3.9.2
+# seaborn==0.13.2
+
+# # Model serialization
+# joblib==1.4.2
+
+# # Utilities
+# python-dotenv==1.0.1
+# tqdm==4.67.1
+# requests==2.31.0
+
+# # Note: Transformers/torch removed to save space
+# # LLM features will use templates only in production
+# # To enable LLM: install transformers locally for testing
+
 # Streamlit and UI
 streamlit==1.29.0
 plotly==5.18.0
@@ -7,10 +38,17 @@ scikit-learn==1.5.1
 pandas==2.2.2
 numpy==1.26.4
 
-# NLP processing
+# NLP processing for ABSA
+spacy==3.7.5
 nltk==3.9.1
 
-# Model tracking (lightweight)
+# LLM support for response generation
+transformers==4.36.0
+torch==2.1.0
+accelerate==0.25.0
+sentencepiece==0.1.99
+
+# Model tracking
 mlflow==2.16.2
 
 # Visualization
@@ -24,7 +62,3 @@ joblib==1.4.2
 python-dotenv==1.0.1
 tqdm==4.67.1
 requests==2.31.0
-
-# Note: Transformers/torch removed to save space
-# LLM features will use templates only in production
-# To enable LLM: install transformers locally for testing
