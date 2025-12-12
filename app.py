@@ -16,9 +16,11 @@ import subprocess
 import requests
 import time
 import os
+import sys
 
 
 # Import your inference pipeline
+sys.path.insert(0, str(Path(__file__).parent / 'Model-Pipeline'))
 from inference_pipeline import EchoAIInference
 
 try:
