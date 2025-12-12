@@ -45,7 +45,44 @@ jobs:
       - name: Download raw data from GCS
         run: |
           mkdir -p data/raw/
-          gsutil cp gs://us-central1-echo-ai-9c58f7b7-bucket/data/raw/dataset_restaurant-review-aggregator_2025-11-22_23-47-46-681.csv data/raw/apify_unprocessed.csv
+          
+          echo "Downloading 3 CSV files from GCS..."
+          gsutil cp gs://us-central1-echo-ai-9c58f7b7-bucket/data/raw/dataset_restaurant-review-aggregator_2025-11-22_23-47-46-681.csv data/raw/dataset1.csv
+          gsutil cp gs://us-central1-echo-ai-9c58f7b7-bucket/data/raw/dataset_restaurant-review-aggregator_2025-12-12_08-44-39-534.csv data/raw/dataset2.csv
+          gsutil cp gs://us-central1-echo-ai-9c58f7b7-bucket/data/raw/dataset_restaurant-review-aggregator_2025-12-12_08-53-12-176.csv data/raw/dataset3.csv
+          
+          echo "Merging CSV files..."
+          python -c "
+          import pandas as pd
+          
+          print('Loading CSV files...')
+          df1 = pd.read_csv('data/raw/dataset1.csv')
+          df2 = pd.read_csv('data/raw/dataset2.csv')
+          df3 = pd.read_csv('data/raw/dataset3.csv')
+          
+          print(f'Dataset 1: {len(df1)} reviews')
+          print(f'Dataset 2: {len(df2)} reviews')
+          print(f'Dataset 3: {len(df3)} reviews')
+          
+          # Merge all datasets
+          df_merged = pd.concat([df1, df2, df3], ignore_index=True)
+          
+          # Remove duplicates if any
+          before_dedup = len(df_merged)
+          df_merged = df_merged.drop_duplicates(subset=['reviewText'], keep='first')
+          after_dedup = len(df_merged)
+          
+          print(f'Total merged: {before_dedup} reviews')
+          print(f'After deduplication: {after_dedup} reviews')
+          print(f'Duplicates removed: {before_dedup - after_dedup}')
+          
+          # Save merged file
+          df_merged.to_csv('data/raw/apify_unprocessed.csv', index=False)
+          print('Saved to data/raw/apify_unprocessed.csv')
+          "
+          
+          echo "✓ Data merge complete!"
+          ls -lh data/raw/apify_unprocessed.csv
       
       - name: Checkout code
         uses: actions/checkout@v4
@@ -58,7 +95,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install --no-cache-dir -r requirements.txt
+          pip install --no-cache-dir -r requirements-ci.txt
       
       - name: Run preprocessing
         run: |
@@ -114,7 +151,7 @@ jobs:
       
       - name: Install dependencies
         run: |
-          pip install --no-cache-dir -r requirements.txt
+          pip install --no-cache-dir -r requirements-ci.txt
       
       - name: Download processed data
         uses: actions/download-artifact@v4
@@ -173,7 +210,7 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
       
       - name: Install dependencies
-        run: pip install --no-cache-dir -r requirements.txt
+        run: pip install --no-cache-dir -r requirements-ci.txt
       
       - name: Download artifacts
         uses: actions/download-artifact@v4
@@ -227,7 +264,7 @@ jobs:
       
       - name: Install dependencies
         run: |
-          pip install --no-cache-dir -r requirements.txt
+          pip install --no-cache-dir -r requirements-ci.txt
       
       - name: Download trained models
         uses: actions/download-artifact@v4
@@ -345,7 +382,7 @@ jobs:
       
       - name: Install dependencies including transformers
         run: |
-          pip install --no-cache-dir -r requirements.txt
+          pip install --no-cache-dir -r requirements-ci.txt
           pip install transformers==4.36.0 torch==2.1.0 accelerate==0.25.0
           pip install sentencepiece protobuf
       
@@ -396,7 +433,7 @@ jobs:
           start_time = time.time()
           
           try:
-              pipeline = EchoAIInference(llm_model='google/flan-t5-large')
+              pipeline = EchoAIInference(llm_model='google/flan-t5-base')
               pipeline.load_models(load_llm=True)
               print(f'[OK] LLM loaded in {time.time() - start_time:.1f}s')
               
@@ -536,7 +573,7 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
       
       - name: Install dependencies
-        run: pip install --no-cache-dir -r requirements.txt
+        run: pip install --no-cache-dir -r requirements-ci.txt
       
       - name: Download artifacts
         uses: actions/download-artifact@v4
