@@ -1,0 +1,90 @@
+name: Deploy to Cloud Run
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'app.py'
+      - 'Model-Pipeline/**'
+      - 'Dockerfile'
+      - 'requirements-streamlit.txt'
+  workflow_dispatch:
+
+env:
+  PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  SERVICE_NAME: echoai-streamlit
+  REGION: us-central1
+  GCS_BUCKET: ${{ secrets.GCP_PROJECT_ID }}-models
+
+jobs:
+  deploy:
+    name: Deploy Streamlit App to Cloud Run
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+      
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+      
+      - name: Configure Docker for Artifact Registry
+        run: |
+          gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev
+      
+      - name: Upload trained models to GCS
+        run: |
+          # Check if models exist locally (from CI/CD artifacts)
+          if [ -f "Model-Pipeline/models/best_model.pkl" ]; then
+            echo "Uploading models to GCS..."
+            gsutil cp Model-Pipeline/models/best_model.pkl gs://${{ env.GCS_BUCKET }}/models/
+            gsutil cp Model-Pipeline/models/tfidf_vectorizer.pkl gs://${{ env.GCS_BUCKET }}/models/
+            echo "✓ Models uploaded"
+          else
+            echo "⚠ No models found locally, will use existing GCS models"
+          fi
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Build Docker image for AMD64
+        run: |
+          docker buildx build \
+            --platform linux/amd64 \
+            --tag ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/echoai/${{ env.SERVICE_NAME }}:${{ github.sha }} \
+            --tag ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/echoai/${{ env.SERVICE_NAME }}:latest \
+            --load \
+            .
+      
+      - name: Push Docker image
+        run: |
+          docker push ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/echoai/${{ env.SERVICE_NAME }}:${{ github.sha }}
+          docker push ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/echoai/${{ env.SERVICE_NAME }}:latest
+      
+      - name: Deploy to Cloud Run
+        run: |
+          gcloud run deploy ${{ env.SERVICE_NAME }} \
+            --image ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/echoai/${{ env.SERVICE_NAME }}:${{ github.sha }} \
+            --platform managed \
+            --region ${{ env.REGION }} \
+            --allow-unauthenticated \
+            --memory 4Gi \
+            --cpu 2 \
+            --timeout 300 \
+            --set-env-vars="GCS_BUCKET=${{ env.GCS_BUCKET }}" \
+            --max-instances 10 \
+            --min-instances 0
+      
+      - name: Get Service URL
+        run: |
+          SERVICE_URL=$(gcloud run services describe ${{ env.SERVICE_NAME }} --platform managed --region ${{ env.REGION }} --format 'value(status.url)')
+          echo "### 🚀 Deployment Successful!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**EchoAI Streamlit App URL:** $SERVICE_URL" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Click the link to access your app!" >> $GITHUB_STEP_SUMMARY
