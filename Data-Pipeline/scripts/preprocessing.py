@@ -98,6 +98,7 @@
 
 
 # Data-Pipeline/scripts/preprocessing.py
+# Data-Pipeline/scripts/preprocessing.py
 import pandas as pd
 import numpy as np
 import re
@@ -144,13 +145,20 @@ def handle_missing_values(df: pd.DataFrame) -> pd.DataFrame:
     logger.info(f"Missing values before handling: {df.isnull().sum().sum()}")
 
     if "reviewRating" in df.columns:
-        # Convert to numeric, coercing errors to NaN
+        # FIRST: Remove header rows mixed in data
+        for col in df.columns:
+            df = df[df[col].astype(str) != col]
+        
+        # SECOND: Convert to numeric, bad values become NaN
         df["reviewRating"] = pd.to_numeric(df["reviewRating"], errors='coerce')
         
-        # Drop rows where reviewRating is NaN (includes header rows)
+        # THIRD: Keep only valid ratings (1-5)
+        df = df[df["reviewRating"].between(1, 5)]
+        
+        # FOURTH: Drop remaining NaN
         df = df.dropna(subset=["reviewRating"])
         
-        # Now safe to convert to int
+        # FIFTH: Now safe to convert to int
         df["reviewRating"] = df["reviewRating"].astype(int)
 
         df["reviewText"] = df.apply(
@@ -161,6 +169,7 @@ def handle_missing_values(df: pd.DataFrame) -> pd.DataFrame:
         )
     
     logger.info(f"Missing values after handling: {df.isnull().sum().sum()}")
+    logger.info(f"Rows after cleanup: {len(df)}")
     return df
 
 def preprocess_data(input_path: str = '../../data/raw/apify_unprocessed.csv',
