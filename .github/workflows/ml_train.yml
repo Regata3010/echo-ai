@@ -30,7 +30,7 @@ env:
 jobs:
   data-preprocessing:
     name: Data Preprocessing Pipeline
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latestow
     outputs:
       preprocessing-passed: ${{ steps.validate.outputs.passed }}
     steps:
