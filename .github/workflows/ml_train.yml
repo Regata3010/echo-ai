@@ -19,25 +19,23 @@ env:
 
 jobs:
   data-preprocessing:
-          - name: Authenticate to GCP
-            uses: google-github-actions/auth@v2
-            with:
-              credentials_json: ${{ secrets.GCP_SA_KEY }}
-
-          - name: Set up Cloud SDK
-            uses: google-github-actions/setup-gcloud@v2
-
-          - name: Download raw data from GCS
-            run: |
-              mkdir -p data/raw/
-              gsutil cp gs://us-central1-echo-ai-9c58f7b7-bucket/data/raw/dataset_restaurant-review-aggregator_2025-11-22_23-47-46-681.csv data/raw/apify_unprocessed.csv
     name: Data Preprocessing Pipeline
     runs-on: ubuntu-latest
-    
     outputs:
       preprocessing-passed: ${{ steps.validate.outputs.passed }}
-      
     steps:
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Download raw data from GCS
+        run: |
+          mkdir -p data/raw/
+          gsutil cp gs://us-central1-echo-ai-9c58f7b7-bucket/data/raw/dataset_restaurant-review-aggregator_2025-11-22_23-47-46-681.csv data/raw/apify_unprocessed.csv
       - name: Checkout code
         uses: actions/checkout@v4
       
