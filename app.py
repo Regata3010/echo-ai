@@ -16,8 +16,7 @@ import subprocess
 import requests
 import time
 import os
-import transformers
-import warnings
+
 
 # Import your inference pipeline
 from inference_pipeline import EchoAIInference
@@ -27,6 +26,8 @@ try:
     TRANSFORMERS_AVAILABLE = True
 except ImportError:
     TRANSFORMERS_AVAILABLE = False
+    import warnings
+    warnings.warn("Transformers not available. Using template responses only.")
 
 # Page configuration
 st.set_page_config(
