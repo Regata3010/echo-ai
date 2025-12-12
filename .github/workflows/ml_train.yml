@@ -6,7 +6,7 @@ on:
     paths:
       - 'Model-Pipeline/**'
       - 'Data-Pipeline/**'
-      - 'data/raw/apify_data.csv'
+      - 'data/raw/apify_unprocessed.csv'
       - 'requirements.txt'
   workflow_dispatch:
 
@@ -21,11 +21,22 @@ jobs:
   data-preprocessing:
     name: Data Preprocessing Pipeline
     runs-on: ubuntu-latest
-    
     outputs:
       preprocessing-passed: ${{ steps.validate.outputs.passed }}
-      
     steps:
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Download raw data from GCS
+        run: |
+          mkdir -p data/raw/
+          gsutil cp gs://us-central1-echo-ai-9c58f7b7-bucket/data/raw/dataset_restaurant-review-aggregator_2025-11-22_23-47-46-681.csv data/raw/apify_unprocessed.csv
+      
       - name: Checkout code
         uses: actions/checkout@v4
       
@@ -37,13 +48,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install --no-cache-dir -r requirements.txt
-          pip list | grep spacy
-      
-      - name: Download NLP models
-        run: |
-          python -m spacy download en_core_web_sm
-          python -m textblob.download_corpora
+          pip install --no-cache-dir -r requirements-ci.txt
       
       - name: Run preprocessing
         run: |
@@ -61,8 +66,8 @@ jobs:
           cd Data-Pipeline/scripts
           python validation.py
           
-          if [ -f "../../data/metrics/validation_results.json" ]; then
-            PASSED=$(python -c "import json; data=json.load(open('../../data/metrics/validation_results.json')); print(data.get('validation_passed', False))")
+          if [ -f "data/metrics/validation_results.json" ]; then
+            PASSED=$(python -c "import json; data=json.load(open('data/metrics/validation_results.json')); print(data.get('validation_passed', False))")
             echo "passed=$PASSED" >> $GITHUB_OUTPUT
             
             if [ "$PASSED" = "False" ]; then
@@ -71,27 +76,11 @@ jobs:
             fi
           fi
       
-      - name: Run Aspect-Based Sentiment Analysis
-        run: |
-          cd Model-Pipeline/AspectSA
-          python aspectsentiment.py
-      
-      - name: Generate and Score Responses
-        run: |
-          cd Model-Pipeline/QualityControl
-          python runqualityanalysis.py
-      
       - name: Upload processed data
         uses: actions/upload-artifact@v4
         with:
           name: processed-data
-          path: |
-            data/processed/
-            data/metrics/
-            Model-Pipeline/results/aspect_*.png
-            Model-Pipeline/results/quality_*.png
-            Model-Pipeline/results/absa_comparison_report.json
-            Model-Pipeline/results/response_quality_report.json
+          path: data/
 
   model-training:
     name: Train ML Model
@@ -112,11 +101,10 @@ jobs:
         uses: actions/setup-python@v4
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-          cache: 'pip'
       
       - name: Install dependencies
         run: |
-          pip install -r requirements.txt
+          pip install --no-cache-dir -r requirements-ci.txt
       
       - name: Download processed data
         uses: actions/download-artifact@v4
@@ -175,13 +163,7 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
       
       - name: Install dependencies
-        run: |
-          pip install -r requirements.txt
-      
-      - name: Download NLP models
-        run: |
-          python -m spacy download en_core_web_sm
-          python -m textblob.download_corpora
+        run: pip install --no-cache-dir -r requirements-ci.txt
       
       - name: Download artifacts
         uses: actions/download-artifact@v4
@@ -214,45 +196,15 @@ jobs:
             echo "[ERROR] F1=$F1_SCORE below threshold $MIN_F1_SCORE"
             exit 1
           fi
-      
-      - name: Run Inference Pipeline
-        run: |
-          cd Model-Pipeline
-          python -c "
-          from inference_pipeline import EchoAIInference
-          import pandas as pd
-          
-          # Load test data
-          df = pd.read_csv('../data/processed/features_apify.csv').head(50)
-          
-          # Run inference
-          pipeline = EchoAIInference()
-          pipeline.load_models(load_llm=False)
-          df_results = pipeline.process_dataframe(df, generate_responses=True)
-          
-          # Save results
-          df_results.to_csv('results/inference_results.csv', index=False)
-          print(f'Generated responses for {len(df_results)} reviews')
-          "
-      
-      - name: Upload validation and inference results
-        uses: actions/upload-artifact@v4
-        with:
-          name: validation-results
-          path: |
-            Model-Pipeline/results/validation_results.json
-            Model-Pipeline/results/inference_results.csv
-            Model-Pipeline/results/confusion_matrix.png
-            Model-Pipeline/results/roc_curves.png
 
-  bias-detection:
-    name: Bias and Fairness Check
+  inference-and-response-generation:
+    name: Run Inference & Generate Responses
     runs-on: ubuntu-latest
     needs: model-validation
     if: needs.model-validation.outputs.validation-passed == 'true'
     
     outputs:
-      bias-passed: ${{ steps.bias.outputs.passed }}
+      inference-completed: ${{ steps.inference.outputs.completed }}
       
     steps:
       - name: Checkout code
@@ -264,7 +216,103 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
       
       - name: Install dependencies
-        run: pip install -r requirements.txt
+        run: |
+          pip install --no-cache-dir -r requirements-ci.txt
+      
+      - name: Download trained models
+        uses: actions/download-artifact@v4
+        with:
+          name: trained-models
+          path: Model-Pipeline/
+      
+      - name: Download processed data
+        uses: actions/download-artifact@v4
+        with:
+          name: processed-data
+          path: data/
+      
+      - name: Run inference pipeline (sentiment only)
+        id: inference
+        timeout-minutes: 20
+        run: |
+          cd Model-Pipeline
+          
+          # Run inference without LLM (template-based responses)
+          python -c "
+          from inference_pipeline import EchoAIInference
+          import pandas as pd
+          from pathlib import Path
+          
+          print('[INFO] Loading test data...')
+          df = pd.read_csv('../data/processed/features_apify.csv').head(100)
+          print(f'[INFO] Loaded {len(df)} reviews')
+          
+          print('[INFO] Initializing inference pipeline...')
+          pipeline = EchoAIInference()
+          pipeline.load_models(load_llm=False)  # Skip LLM in CI/CD
+          
+          print('[INFO] Running inference and generating template responses...')
+          df_results = pipeline.process_dataframe(
+              df, 
+              generate_responses=True,
+              save_results=False
+          )
+          
+          # Save results
+          output_file = Path('results/inference_results.csv')
+          output_file.parent.mkdir(exist_ok=True)
+          df_results.to_csv(output_file, index=False)
+          
+          print(f'[OK] Inference completed: {len(df_results)} reviews processed')
+          print(f'[OK] Results saved to {output_file}')
+          
+          # Print sentiment distribution
+          sentiment_dist = df_results['sentiment'].value_counts()
+          print('[INFO] Sentiment Distribution:')
+          for sentiment, count in sentiment_dist.items():
+              print(f'  {sentiment}: {count}')
+          
+          # Check if responses were generated
+          if 'generated_response' in df_results.columns:
+              responses_generated = df_results['generated_response'].notna().sum()
+              print(f'[OK] Responses generated: {responses_generated}/{len(df_results)}')
+          " 
+          
+          if [ $? -eq 0 ]; then
+            echo "completed=true" >> $GITHUB_OUTPUT
+          else
+            echo "completed=false" >> $GITHUB_OUTPUT
+            exit 1
+          fi
+      
+      - name: Upload inference results
+        uses: actions/upload-artifact@v4
+        with:
+          name: inference-results
+          path: |
+            Model-Pipeline/results/inference_results.csv
+
+  bias-detection:
+    name: Bias and Fairness Check
+    runs-on: ubuntu-latest
+    needs: model-validation
+    if: needs.model-validation.outputs.validation-passed == 'true'
+    
+    outputs:
+      bias-passed: ${{ steps.bias.outputs.passed }}
+      violations: ${{ steps.bias.outputs.violations }}
+      
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      
+      - name: Install dependencies
+        run: pip install --no-cache-dir -r requirements-ci.txt
       
       - name: Download artifacts
         uses: actions/download-artifact@v4
@@ -304,7 +352,7 @@ jobs:
   push-to-gcr:
     name: Push Model to GCR
     runs-on: ubuntu-latest
-    needs: [model-training, model-validation, bias-detection]
+    needs: [model-training, model-validation, bias-detection, inference-and-response-generation]
     if: |
       needs.model-validation.outputs.validation-passed == 'true' &&
       github.ref == 'refs/heads/main'
@@ -331,6 +379,12 @@ jobs:
           name: trained-models
           path: Model-Pipeline/
       
+      - name: Download inference results
+        uses: actions/download-artifact@v4
+        with:
+          name: inference-results
+          path: Model-Pipeline/results/
+      
       - name: Create model package
         run: |
           cd Model-Pipeline/models
@@ -345,7 +399,9 @@ jobs:
             "f1_score": ${{ needs.model-training.outputs.f1-score }},
             "trained_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
             "git_commit": "${{ github.sha }}",
-            "git_branch": "${{ github.ref_name }}"
+            "git_branch": "${{ github.ref_name }}",
+            "inference_completed": "${{ needs.inference-and-response-generation.outputs.inference-completed }}",
+            "bias_violations": ${{ needs.bias-detection.outputs.violations }}
           }
           EOF
           
@@ -368,6 +424,10 @@ jobs:
           gsutil cp Model-Pipeline/models/model-package/model_metadata.json \
             $BUCKET/echoai-sentiment-model/$VERSION/metadata.json
           
+          # Upload inference results
+          gsutil cp Model-Pipeline/results/inference_results.csv \
+            $BUCKET/echoai-sentiment-model/$VERSION/inference_results.csv
+          
           # Tag as latest
           echo "$VERSION" | gsutil cp - $BUCKET/echoai-sentiment-model/latest.txt
           
@@ -382,22 +442,18 @@ jobs:
           echo "  Version: ${{ env.MODEL_VERSION }}"
           echo "  Location: gs://${{ env.PROJECT_ID }}-models/echoai-sentiment-model/${{ env.MODEL_VERSION }}/"
           echo "  F1 Score: ${{ needs.model-training.outputs.f1-score }}"
+          echo "  Bias Violations: ${{ needs.bias-detection.outputs.violations }}"
+          echo "  Inference Completed: ${{ needs.inference-and-response-generation.outputs.inference-completed }}"
           echo "  Commit: ${{ github.sha }}"
 
   notify:
     name: Send Notifications
     runs-on: ubuntu-latest
-    needs: [data-preprocessing, model-training, model-validation, bias-detection, push-to-gcr]
+    needs: [data-preprocessing, model-training, model-validation, inference-and-response-generation, bias-detection, push-to-gcr]
     if: always()
     
     steps:
-      - name: Download all artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: processed-data
-          path: results/
-      
-      - name: Create comprehensive summary
+      - name: Create summary
         run: |
           echo "## EchoAI ML Pipeline Results" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
@@ -406,33 +462,20 @@ jobs:
           echo "- F1 Score: ${{ needs.model-training.outputs.f1-score }}" >> $GITHUB_STEP_SUMMARY
           echo "- Bias Violations: ${{ needs.bias-detection.outputs.violations }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Advanced Analysis" >> $GITHUB_STEP_SUMMARY
-          
-          # Add ABSA metrics if available
-          if [ -f "results/absa_comparison_report.json" ]; then
-            echo "- Aspect-Based Analysis: COMPLETED" >> $GITHUB_STEP_SUMMARY
-            ASPECTS=$(python -c "import json; data=json.load(open('results/absa_comparison_report.json')); print(len(data.get('aspect_analysis', {}).get('aspect_analysis', {})))")
-            echo "- Aspects Analyzed: $ASPECTS" >> $GITHUB_STEP_SUMMARY
-          fi
-          
-          # Add Response Quality metrics if available
-          if [ -f "results/response_quality_report.json" ]; then
-            echo "- Response Quality Analysis: COMPLETED" >> $GITHUB_STEP_SUMMARY
-            AVG_QUALITY=$(python -c "import json; data=json.load(open('results/response_quality_report.json')); print(data.get('average_quality_score', 0))")
-            echo "- Average Response Quality: $AVG_QUALITY/10" >> $GITHUB_STEP_SUMMARY
-          fi
-          
+          echo "### Inference & Response Generation" >> $GITHUB_STEP_SUMMARY
+          echo "- Inference Completed: ${{ needs.inference-and-response-generation.outputs.inference-completed }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Response Strategy: Template-based (LLM skipped in CI/CD)" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Pipeline Status" >> $GITHUB_STEP_SUMMARY
           echo "- Data Preprocessing: ${{ needs.data-preprocessing.result }}" >> $GITHUB_STEP_SUMMARY
           echo "- Model Training: ${{ needs.model-training.result }}" >> $GITHUB_STEP_SUMMARY
           echo "- Model Validation: ${{ needs.model-validation.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Inference & Responses: ${{ needs.inference-and-response-generation.result }}" >> $GITHUB_STEP_SUMMARY
           echo "- Bias Detection: ${{ needs.bias-detection.result }}" >> $GITHUB_STEP_SUMMARY
           echo "- GCR Upload: ${{ needs.push-to-gcr.result }}" >> $GITHUB_STEP_SUMMARY
-          
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Artifacts Generated" >> $GITHUB_STEP_SUMMARY
-          echo "- Aspect sentiment visualizations" >> $GITHUB_STEP_SUMMARY
-          echo "- Response quality analysis" >> $GITHUB_STEP_SUMMARY
-          echo "- Model performance metrics" >> $GITHUB_STEP_SUMMARY
+          echo "### Artifacts" >> $GITHUB_STEP_SUMMARY
+          echo "- Trained models with vectorizer" >> $GITHUB_STEP_SUMMARY
+          echo "- Inference results with generated responses" >> $GITHUB_STEP_SUMMARY
           echo "- Bias detection reports" >> $GITHUB_STEP_SUMMARY
+          echo "- Model performance metrics" >> $GITHUB_STEP_SUMMARY

@@ -4,8 +4,6 @@ pandas==2.2.2
 numpy==1.26.4
 
 # NLP processing
-spacy==3.7.5
-textblob==0.18.0.post0
 nltk==3.9.1
 
 # Model tracking (optional for CI)
@@ -19,9 +17,9 @@ seaborn==0.13.2
 pytest==8.3.3
 joblib==1.4.2
 
-# OpenAI for response generation
-openai==1.54.5
-
 # Utilities
 python-dotenv==1.0.1
 tqdm==4.67.1
+
+# For inference pipeline (no heavy transformers in CI/CD)
+# We'll use template-based responses to avoid downloading large LLM models
