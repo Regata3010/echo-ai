@@ -1,3 +1,102 @@
+# # Data-Pipeline/scripts/preprocessing.py
+# import pandas as pd
+# import numpy as np
+# import re
+# import logging
+# from typing import Optional
+
+# logging.basicConfig(level=logging.INFO)
+# logger = logging.getLogger(__name__)
+
+# def clean_text(text: str) -> str:
+#     """Clean and normalize review text"""
+#     if pd.isna(text):
+#         return ""
+    
+#     # Convert to string and lowercase
+#     text = str(text).lower()
+    
+#     # Remove URLs
+#     text = re.sub(r'http\S+|www.\S+', '', text)
+    
+#     # Remove HTML tags
+#     text = re.sub(r'<.*?>', '', text)
+    
+#     # Remove special characters but keep spaces and basic punctuation
+#     text = re.sub(r'[^a-zA-Z0-9\s.,!?]', '', text)
+    
+#     # Remove extra whitespace
+#     text = ' '.join(text.split())
+    
+#     return text.strip()
+
+# def generate_template_review(rating: int) -> str:
+#     templates = {
+#         5: "Absolutely amazing experience! Highly recommended.",
+#         4: "A very good experience overall.",
+#         3: "An average, neutral experience.",
+#         2: "A below-average experience. Could be better.",
+#         1: "This was the worst experience I’ve had."
+#     }
+#     return templates.get(rating, "")
+
+
+# def handle_missing_values(df: pd.DataFrame) -> pd.DataFrame:
+#     logger.info(f"Missing values before handling: {df.isnull().sum().sum()}")
+
+#     if "reviewRating" in df.columns:
+#         df = df.dropna(subset=["reviewRating"])
+
+#         df["reviewRating"] = df["reviewRating"].astype(int)
+
+#         df["reviewText"] = df.apply(
+#             lambda row: generate_template_review(row["reviewRating"]) 
+#             if pd.isna(row["reviewText"]) or str(row["reviewText"]).strip() == "" 
+#             else row["reviewText"],
+#             axis=1
+#         )
+    
+#     logger.info(f"Missing values after handling: {df.isnull().sum().sum()}")
+#     return df
+
+# def preprocess_data(input_path: str = '../../data/raw/apify_unprocessed.csv',
+#                    output_path: str = '../../data/raw/clean_apify_processed.csv') -> pd.DataFrame:
+#     """Main preprocessing pipeline"""
+#     try:
+#         # Load data
+#         logger.info(f"Loading data from {input_path}")
+#         df = pd.read_csv(input_path)
+#         logger.info(f"Loaded {len(df)} reviews")
+        
+#         expected_cols = {"placeName", "placeAddress", "reviewText","reviewDate", "reviewRating", "authorName"}
+#         if not expected_cols.issubset(df.columns):
+#             missing = expected_cols - set(df.columns)
+#             raise ValueError(f"Missing required columns: {missing}")
+
+#         # Handle missing values
+#         df = handle_missing_values(df)
+        
+#         df["reviewDate"] = pd.to_datetime(df["reviewDate"], errors="coerce").dt.date
+
+#         # Clean text
+#         logger.info("Cleaning text...")
+#         df['reviewText'] = df['reviewText'].apply(clean_text)
+        
+#         # Save processed data
+#         df.to_csv(output_path, index=False)
+#         logger.info(f"Saved {len(df)} processed reviews to {output_path}")
+        
+#         return df
+        
+#     except Exception as e:
+#         logger.error(f"Preprocessing failed: {e}")
+#         raise
+
+# if __name__ == "__main__":
+#     preprocess_data()
+
+
+
 # Data-Pipeline/scripts/preprocessing.py
 import pandas as pd
 import numpy as np
@@ -36,7 +135,7 @@ def generate_template_review(rating: int) -> str:
         4: "A very good experience overall.",
         3: "An average, neutral experience.",
         2: "A below-average experience. Could be better.",
-        1: "This was the worst experience I’ve had."
+        1: "This was the worst experience I've had."
     }
     return templates.get(rating, "")
 
@@ -45,8 +144,13 @@ def handle_missing_values(df: pd.DataFrame) -> pd.DataFrame:
     logger.info(f"Missing values before handling: {df.isnull().sum().sum()}")
 
     if "reviewRating" in df.columns:
+        # Convert to numeric, coercing errors to NaN
+        df["reviewRating"] = pd.to_numeric(df["reviewRating"], errors='coerce')
+        
+        # Drop rows where reviewRating is NaN (includes header rows)
         df = df.dropna(subset=["reviewRating"])
-
+        
+        # Now safe to convert to int
         df["reviewRating"] = df["reviewRating"].astype(int)
 
         df["reviewText"] = df.apply(
@@ -67,6 +171,12 @@ def preprocess_data(input_path: str = '../../data/raw/apify_unprocessed.csv',
         logger.info(f"Loading data from {input_path}")
         df = pd.read_csv(input_path)
         logger.info(f"Loaded {len(df)} reviews")
+        
+        # Remove duplicate header rows that got mixed into data
+        for col in df.columns:
+            df = df[df[col].astype(str) != col]
+        
+        logger.info(f"After removing duplicate headers: {len(df)} reviews")
         
         expected_cols = {"placeName", "placeAddress", "reviewText","reviewDate", "reviewRating", "authorName"}
         if not expected_cols.issubset(df.columns):
@@ -94,124 +204,3 @@ def preprocess_data(input_path: str = '../../data/raw/apify_unprocessed.csv',
 
 if __name__ == "__main__":
     preprocess_data()
-
-
-
-# # Data-Pipeline/scripts/preprocessing.py
-
-# import pandas as pd
-# import numpy as np
-# import re
-# import logging
-# from typing import Optional
-
-# logging.basicConfig(level=logging.INFO)
-# logger = logging.getLogger(__name__)
-
-
-# def clean_text(text: str) -> str:
-#     """Clean and normalize review text"""
-#     if pd.isna(text):
-#         return ""
-
-#     # Convert to string and lowercase
-#     text = str(text).lower()
-
-#     # Remove URLs
-#     text = re.sub(r"http\S+|www.\S+", "", text)
-
-#     # Remove HTML tags
-#     text = re.sub(r"<.*?>", "", text)
-
-#     # Remove special characters but keep spaces and basic punctuation
-#     text = re.sub(r"[^a-zA-Z0-9\s.,!?]", "", text)
-
-#     # Remove extra whitespace
-#     text = " ".join(text.split())
-
-#     return text.strip()
-
-
-# def generate_template_review(rating: int) -> str:
-#     templates = {
-#         5: "Absolutely amazing experience! Highly recommended.",
-#         4: "A very good experience overall.",
-#         3: "An average, neutral experience.",
-#         2: "A below-average experience. Could be better.",
-#         1: "This was the worst experience I’ve had.",
-#     }
-#     return templates.get(rating, "")
-
-
-# def handle_missing_values(df: pd.DataFrame) -> pd.DataFrame:
-#     logger.info(f"Missing values before handling: {df.isnull().sum().sum()}")
-
-#     if "reviewRating" in df.columns:
-#         # Drop rows with missing rating
-#         df = df.dropna(subset=["reviewRating"])
-#         df["reviewRating"] = df["reviewRating"].astype(int)
-
-#         # Fill missing/empty reviewText using rating-based templates
-#         df["reviewText"] = df.apply(
-#             lambda row: generate_template_review(row["reviewRating"])
-#             if pd.isna(row["reviewText"]) or str(row["reviewText"]).strip() == ""
-#             else row["reviewText"],
-#             axis=1,
-#         )
-
-#     logger.info(f"Missing values after handling: {df.isnull().sum().sum()}")
-#     return df
-
-
-# def preprocess_data(
-#     input_path: str = "../../data/raw/apify_unprocessed.csv",
-#     output_path: str = "../../data/raw/clean_apify_processed.csv",
-# ) -> pd.DataFrame:
-#     """Main preprocessing pipeline"""
-#     try:
-#         # Load data
-#         logger.info(f"Loading data from {input_path}")
-#         df = pd.read_csv(input_path)
-#         logger.info(f"Loaded {len(df)} reviews")
-
-#         expected_cols = {
-#             "placeName",
-#             "placeAddress",
-#             "reviewText",
-#             "reviewDate",
-#             "reviewRating",
-#             "authorName",
-#         }
-#         if not expected_cols.issubset(df.columns):
-#             missing = expected_cols - set(df.columns)
-#             raise ValueError(f"Missing required columns: {missing}")
-
-#         # Handle missing values
-#         df = handle_missing_values(df)
-
-#         # Parse dates
-#         df["reviewDate"] = pd.to_datetime(df["reviewDate"], errors="coerce").dt.date
-
-#         # Clean text
-#         logger.info("Cleaning text...")
-#         df["reviewText"] = df["reviewText"].apply(clean_text)
-
-#         # Drop any rows that still ended up with empty text after cleaning
-#         before = len(df)
-#         df = df[df["reviewText"].astype(str).str.strip() != ""]
-#         after = len(df)
-#         logger.info(f"Dropped {before - after} rows with empty reviewText after cleaning")
-
-#         # Save processed data
-#         df.to_csv(output_path, index=False)
-#         logger.info(f"Saved {len(df)} processed reviews to {output_path}")
-
-#         return df
-
-#     except Exception as e:
-#         logger.error(f"Preprocessing failed: {e}")
-#         raise
-
-
-# if __name__ == "__main__":
-#     preprocess_data()
