@@ -172,7 +172,11 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
       
       - name: Install dependencies
-        run: pip install -r requirements.txt
+        run: |
+          pip install -r requirements.txt
+          pip install spacy textblob
+          python -m spacy download en_core_web_sm
+          python -m textblob.download_corpora
       
       - name: Download artifacts
         uses: actions/download-artifact@v4
