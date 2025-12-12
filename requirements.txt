@@ -20,6 +20,7 @@ joblib==1.4.2
 # Utilities
 python-dotenv==1.0.1
 tqdm==4.67.1
+optuna==3.6.1
 
 # For inference pipeline (no heavy transformers in CI/CD)
 # We'll use template-based responses to avoid downloading large LLM models
