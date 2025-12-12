@@ -2,6 +2,9 @@
 EchoAI Streamlit Interface
 Interactive UI for review sentiment analysis and response generation
 """
+
+# Check if transformers is available
+
 import streamlit as st
 import pandas as pd
 from datetime import datetime
@@ -13,9 +16,17 @@ import subprocess
 import requests
 import time
 import os
+import transformers
+import warnings
 
 # Import your inference pipeline
 from inference_pipeline import EchoAIInference
+
+try:
+    import transformers
+    TRANSFORMERS_AVAILABLE = True
+except ImportError:
+    TRANSFORMERS_AVAILABLE = False
 
 # Page configuration
 st.set_page_config(
@@ -129,6 +140,10 @@ def stop_mlflow_ui():
 
 def load_model(llm_model='google/flan-t5-base', load_llm=True):
     """Load the inference pipeline"""
+    
+    if load_llm and not TRANSFORMERS_AVAILABLE:
+        st.warning("⚠️ LLM libraries not installed. Using template responses only.")
+        load_llm = False
     with st.spinner('🔄 Loading models... This may take a moment...'):
         try:
             pipeline = EchoAIInference(llm_model=llm_model)

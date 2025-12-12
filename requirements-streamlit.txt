@@ -10,7 +10,7 @@ numpy==1.26.4
 # NLP processing
 nltk==3.9.1
 
-# Model tracking
+# Model tracking (lightweight)
 mlflow==2.16.2
 
 # Visualization
@@ -20,13 +20,11 @@ seaborn==0.13.2
 # Model serialization
 joblib==1.4.2
 
-# LLM support (optional - user can choose to enable)
-transformers==4.36.0
-torch==2.1.0
-accelerate==0.25.0
-sentencepiece==0.1.99
-
 # Utilities
 python-dotenv==1.0.1
 tqdm==4.67.1
 requests==2.31.0
+
+# Note: Transformers/torch removed to save space
+# LLM features will use templates only in production
+# To enable LLM: install transformers locally for testing

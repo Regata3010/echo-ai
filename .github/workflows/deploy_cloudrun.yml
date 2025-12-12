@@ -25,6 +25,23 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
       
+      - name: Free up disk space
+        run: |
+          echo "Before cleanup:"
+          df -h
+          
+          # Remove unnecessary packages
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /usr/local/share/boost
+          sudo rm -rf "$AGENT_TOOLSDIRECTORY"
+          
+          # Docker cleanup
+          docker system prune -af
+          
+          echo "After cleanup:"
+          df -h
+      
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
         with:
