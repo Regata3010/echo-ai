@@ -174,7 +174,6 @@ jobs:
       - name: Install dependencies
         run: |
           pip install -r requirements.txt
-          pip install spacy textblob
           python -m spacy download en_core_web_sm
           python -m textblob.download_corpora
       
