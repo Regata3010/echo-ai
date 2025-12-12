@@ -9,6 +9,15 @@ on:
       - 'data/raw/apify_unprocessed.csv'
       - 'requirements.txt'
   workflow_dispatch:
+    inputs:
+      test_llm:
+        description: 'Test LLM response generation (adds 10-15 min)'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
 
 env:
   PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
@@ -16,6 +25,7 @@ env:
   PYTHON_VERSION: '3.11'
   MIN_F1_SCORE: 0.60
   MAX_BIAS_VIOLATIONS: 10
+  TEST_LLM: ${{ github.event.inputs.test_llm || 'false' }}
 
 jobs:
   data-preprocessing:
@@ -48,7 +58,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install --no-cache-dir -r requirements.txt
+          pip install --no-cache-dir -r requirements-ci.txt
       
       - name: Run preprocessing
         run: |
@@ -104,7 +114,7 @@ jobs:
       
       - name: Install dependencies
         run: |
-          pip install --no-cache-dir -r requirements.txt
+          pip install --no-cache-dir -r requirements-ci.txt
       
       - name: Download processed data
         uses: actions/download-artifact@v4
@@ -163,7 +173,7 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
       
       - name: Install dependencies
-        run: pip install --no-cache-dir -r requirements.txt
+        run: pip install --no-cache-dir -r requirements-ci.txt
       
       - name: Download artifacts
         uses: actions/download-artifact@v4
@@ -217,7 +227,7 @@ jobs:
       
       - name: Install dependencies
         run: |
-          pip install --no-cache-dir -r requirements.txt
+          pip install --no-cache-dir -r requirements-ci.txt
       
       - name: Download trained models
         uses: actions/download-artifact@v4
@@ -312,6 +322,200 @@ jobs:
           path: |
             Model-Pipeline/results/inference_results.csv
 
+  llm-response-testing:
+    name: LLM Response Quality Testing
+    runs-on: ubuntu-latest
+    needs: inference-and-response-generation
+    if: |
+      needs.inference-and-response-generation.outputs.inference-completed == 'true' &&
+      github.event.inputs.test_llm == 'true'
+    
+    outputs:
+      llm-tested: ${{ steps.llm_test.outputs.tested }}
+      avg-quality-score: ${{ steps.llm_test.outputs.quality_score }}
+      
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      
+      - name: Install dependencies including transformers
+        run: |
+          pip install --no-cache-dir -r requirements-ci.txt
+          pip install transformers==4.36.0 torch==2.1.0 accelerate==0.25.0
+          pip install sentencepiece protobuf
+      
+      - name: Download trained models
+        uses: actions/download-artifact@v4
+        with:
+          name: trained-models
+          path: Model-Pipeline/
+      
+      - name: Download processed data
+        uses: actions/download-artifact@v4
+        with:
+          name: processed-data
+          path: data/
+      
+      - name: Download template-based inference results
+        uses: actions/download-artifact@v4
+        with:
+          name: inference-results
+          path: Model-Pipeline/results/template_results/
+      
+      - name: Test LLM response generation
+        id: llm_test
+        timeout-minutes: 30
+        run: |
+          cd Model-Pipeline
+          
+          # Find features file
+          FEATURES_FILE=$(find ../data -name "*features*.csv" -o -name "*processed*.csv" | head -1)
+          
+          python -c "
+          from inference_pipeline import EchoAIInference
+          import pandas as pd
+          from pathlib import Path
+          import json
+          import time
+          
+          print('[INFO] Starting LLM Response Testing...')
+          print('[INFO] This will take 10-15 minutes due to model download')
+          
+          # Load test data (smaller sample for LLM testing)
+          features_file = '$FEATURES_FILE'
+          df = pd.read_csv(features_file).head(20)
+          print(f'[INFO] Testing on {len(df)} reviews')
+          
+          # Test with Flan-T5-Base (lightweight LLM)
+          print('[INFO] Initializing LLM pipeline with Flan-T5-Base...')
+          start_time = time.time()
+          
+          try:
+              pipeline = EchoAIInference(llm_model='google/flan-t5-base')
+              pipeline.load_models(load_llm=True)
+              print(f'[OK] LLM loaded in {time.time() - start_time:.1f}s')
+              
+              # Generate LLM-based responses
+              print('[INFO] Generating LLM responses...')
+              gen_start = time.time()
+              df_llm = pipeline.process_dataframe(
+                  df,
+                  generate_responses=True,
+                  save_results=False
+              )
+              print(f'[OK] Generated {len(df_llm)} LLM responses in {time.time() - gen_start:.1f}s')
+              
+              # Save LLM results
+              output_file = Path('results/llm_inference_results.csv')
+              output_file.parent.mkdir(exist_ok=True, parents=True)
+              df_llm.to_csv(output_file, index=False)
+              
+              # Load template results for comparison
+              template_file = Path('results/template_results/inference_results.csv')
+              df_template = pd.read_csv(template_file).head(20)
+              
+              # Compare response quality
+              comparison = {
+                  'llm_model': 'google/flan-t5-base',
+                  'samples_tested': len(df_llm),
+                  'llm_responses': [],
+                  'template_responses': [],
+                  'reviews': [],
+                  'sentiments': [],
+                  'metrics': {
+                      'avg_llm_length': 0,
+                      'avg_template_length': 0,
+                      'generation_time_per_review': (time.time() - gen_start) / len(df_llm)
+                  }
+              }
+              
+              # Collect samples for analysis
+              for idx in range(min(5, len(df_llm))):
+                  comparison['reviews'].append(df_llm.iloc[idx].get('reviewText', ''))
+                  comparison['sentiments'].append(df_llm.iloc[idx].get('sentiment', ''))
+                  comparison['llm_responses'].append(df_llm.iloc[idx].get('generated_response', ''))
+                  comparison['template_responses'].append(df_template.iloc[idx].get('generated_response', ''))
+              
+              # Calculate metrics
+              llm_lengths = df_llm['generated_response'].str.len()
+              template_lengths = df_template['generated_response'].str.len()
+              
+              comparison['metrics']['avg_llm_length'] = float(llm_lengths.mean())
+              comparison['metrics']['avg_template_length'] = float(template_lengths.mean())
+              comparison['metrics']['llm_longer_by'] = float(llm_lengths.mean() - template_lengths.mean())
+              
+              # Simple quality heuristics
+              quality_score = 0
+              if comparison['metrics']['avg_llm_length'] > 50:
+                  quality_score += 2
+              if comparison['metrics']['avg_llm_length'] > 100:
+                  quality_score += 2
+              if comparison['metrics']['generation_time_per_review'] < 5:
+                  quality_score += 3
+              
+              # Check for variation (LLMs should be more varied than templates)
+              unique_llm = df_llm['generated_response'].nunique()
+              unique_template = df_template['generated_response'].nunique()
+              if unique_llm > unique_template:
+                  quality_score += 3
+                  comparison['metrics']['more_varied'] = True
+              else:
+                  comparison['metrics']['more_varied'] = False
+              
+              comparison['metrics']['quality_score'] = quality_score
+              comparison['metrics']['quality_rating'] = 'Excellent' if quality_score >= 8 else 'Good' if quality_score >= 5 else 'Acceptable'
+              
+              # Save comparison report
+              report_file = Path('results/llm_comparison_report.json')
+              with open(report_file, 'w') as f:
+                  json.dump(comparison, f, indent=2)
+              
+              print(f'[OK] LLM Testing Complete')
+              print(f'[INFO] Quality Score: {quality_score}/10 ({comparison[\"metrics\"][\"quality_rating\"]})')
+              print(f'[INFO] Avg LLM Response Length: {comparison[\"metrics\"][\"avg_llm_length\"]:.0f} chars')
+              print(f'[INFO] Avg Template Response Length: {comparison[\"metrics\"][\"avg_template_length\"]:.0f} chars')
+              print(f'[INFO] More Varied: {comparison[\"metrics\"][\"more_varied\"]}')
+              print(f'[INFO] Time per review: {comparison[\"metrics\"][\"generation_time_per_review\"]:.2f}s')
+              
+              # Output for GitHub Actions
+              with open('/tmp/llm_outputs.txt', 'w') as f:
+                  f.write(f'tested=true\n')
+                  f.write(f'quality_score={quality_score}\n')
+              
+          except Exception as e:
+              print(f'[ERROR] LLM testing failed: {e}')
+              import traceback
+              traceback.print_exc()
+              
+              with open('/tmp/llm_outputs.txt', 'w') as f:
+                  f.write(f'tested=false\n')
+                  f.write(f'quality_score=0\n')
+          "
+          
+          # Read outputs
+          if [ -f /tmp/llm_outputs.txt ]; then
+            while IFS='=' read -r key value; do
+              echo "$key=$value" >> $GITHUB_OUTPUT
+            done < /tmp/llm_outputs.txt
+          else
+            echo "tested=false" >> $GITHUB_OUTPUT
+            echo "quality_score=0" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Upload LLM results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: llm-results
+          path: |
+            Model-Pipeline/results/llm_inference_results.csv
+            Model-Pipeline/results/llm_comparison_report.json
+
   bias-detection:
     name: Bias and Fairness Check
     runs-on: ubuntu-latest
@@ -332,7 +536,7 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
       
       - name: Install dependencies
-        run: pip install --no-cache-dir -r requirements.txt
+        run: pip install --no-cache-dir -r requirements-ci.txt
       
       - name: Download artifacts
         uses: actions/download-artifact@v4
@@ -405,6 +609,14 @@ jobs:
           name: inference-results
           path: Model-Pipeline/results/
       
+      - name: Download LLM results (if available)
+        if: always()
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: llm-results
+          path: Model-Pipeline/results/llm/
+      
       - name: Create model package
         run: |
           cd Model-Pipeline/models
@@ -448,6 +660,15 @@ jobs:
           gsutil cp Model-Pipeline/results/inference_results.csv \
             $BUCKET/echoai-sentiment-model/$VERSION/inference_results.csv
           
+          # Upload LLM results if available
+          if [ -f "Model-Pipeline/results/llm/llm_inference_results.csv" ]; then
+            gsutil cp Model-Pipeline/results/llm/llm_inference_results.csv \
+              $BUCKET/echoai-sentiment-model/$VERSION/llm_inference_results.csv
+            gsutil cp Model-Pipeline/results/llm/llm_comparison_report.json \
+              $BUCKET/echoai-sentiment-model/$VERSION/llm_comparison_report.json
+            echo "[OK] LLM results uploaded"
+          fi
+          
           # Tag as latest
           echo "$VERSION" | gsutil cp - $BUCKET/echoai-sentiment-model/latest.txt
           
@@ -469,7 +690,7 @@ jobs:
   notify:
     name: Send Notifications
     runs-on: ubuntu-latest
-    needs: [data-preprocessing, model-training, model-validation, inference-and-response-generation, bias-detection, push-to-gcr]
+    needs: [data-preprocessing, model-training, model-validation, inference-and-response-generation, llm-response-testing, bias-detection, push-to-gcr]
     if: always()
     
     steps:
@@ -483,19 +704,48 @@ jobs:
           echo "- Bias Violations: ${{ needs.bias-detection.outputs.violations }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Inference & Response Generation" >> $GITHUB_STEP_SUMMARY
-          echo "- Inference Completed: ${{ needs.inference-and-response-generation.outputs.inference-completed }}" >> $GITHUB_STEP_SUMMARY
-          echo "- Response Strategy: Template-based (LLM skipped in CI/CD)" >> $GITHUB_STEP_SUMMARY
+          echo "- Template Inference: ${{ needs.inference-and-response-generation.outputs.inference-completed }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Response Strategy: Template-based" >> $GITHUB_STEP_SUMMARY
+          
+          # Add LLM testing results if available
+          if [ "${{ needs.llm-response-testing.outputs.llm-tested }}" = "true" ]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### LLM Response Testing" >> $GITHUB_STEP_SUMMARY
+            echo "- LLM Tested: ✓ Flan-T5-Base" >> $GITHUB_STEP_SUMMARY
+            echo "- Quality Score: ${{ needs.llm-response-testing.outputs.avg-quality-score }}/10" >> $GITHUB_STEP_SUMMARY
+            echo "- Status: Completed successfully" >> $GITHUB_STEP_SUMMARY
+          elif [ "${{ github.event.inputs.test_llm }}" = "true" ]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### LLM Response Testing" >> $GITHUB_STEP_SUMMARY
+            echo "- Status: Failed or skipped" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### LLM Response Testing" >> $GITHUB_STEP_SUMMARY
+            echo "- Status: Skipped (enable with workflow_dispatch)" >> $GITHUB_STEP_SUMMARY
+          fi
+          
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Pipeline Status" >> $GITHUB_STEP_SUMMARY
           echo "- Data Preprocessing: ${{ needs.data-preprocessing.result }}" >> $GITHUB_STEP_SUMMARY
           echo "- Model Training: ${{ needs.model-training.result }}" >> $GITHUB_STEP_SUMMARY
           echo "- Model Validation: ${{ needs.model-validation.result }}" >> $GITHUB_STEP_SUMMARY
-          echo "- Inference & Responses: ${{ needs.inference-and-response-generation.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Template Inference: ${{ needs.inference-and-response-generation.result }}" >> $GITHUB_STEP_SUMMARY
+          
+          if [ "${{ github.event.inputs.test_llm }}" = "true" ]; then
+            echo "- LLM Testing: ${{ needs.llm-response-testing.result }}" >> $GITHUB_STEP_SUMMARY
+          fi
+          
           echo "- Bias Detection: ${{ needs.bias-detection.result }}" >> $GITHUB_STEP_SUMMARY
           echo "- GCR Upload: ${{ needs.push-to-gcr.result }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Artifacts" >> $GITHUB_STEP_SUMMARY
           echo "- Trained models with vectorizer" >> $GITHUB_STEP_SUMMARY
-          echo "- Inference results with generated responses" >> $GITHUB_STEP_SUMMARY
+          echo "- Template-based inference results" >> $GITHUB_STEP_SUMMARY
+          
+          if [ "${{ needs.llm-response-testing.outputs.llm-tested }}" = "true" ]; then
+            echo "- LLM-based inference results" >> $GITHUB_STEP_SUMMARY
+            echo "- LLM vs Template comparison report" >> $GITHUB_STEP_SUMMARY
+          fi
+          
           echo "- Bias detection reports" >> $GITHUB_STEP_SUMMARY
           echo "- Model performance metrics" >> $GITHUB_STEP_SUMMARY
