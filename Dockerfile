@@ -1,5 +1,5 @@
-# Use official Python runtime as base image (AMD64)
-FROM --platform=linux/amd64 python:3.11-slim
+# Use official Python runtime as base image
+FROM python:3.11-slim
 
 # Set working directory
 WORKDIR /app
@@ -8,7 +8,6 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y \
     build-essential \
     curl \
-    software-properties-common \
     git \
     && rm -rf /var/lib/apt/lists/*
 
