@@ -59,14 +59,19 @@ jobs:
         run: |
           mkdir -p data/raw/
           
-          echo "Downloading all 5 CSV files..."
+          echo "Downloading all CSV files..."
           gsutil -m cp 'gs://us-central1-echo-ai-9c58f7b7-bucket/data/raw/dataset_restaurant-review-aggregator_*.csv' data/raw/
+          gsutil cp 'gs://us-central1-echo-ai-9c58f7b7-bucket/data/raw/scraped_low_rated_letsee.csv' data/raw/
+          gsutil cp 'gs://us-central1-echo-ai-9c58f7b7-bucket/data/raw/scraped_reviewsnew.csv' data/raw/
           
           python -c "
           import pandas as pd
           from pathlib import Path
           
-          csv_files = sorted(Path('data/raw').glob('dataset_restaurant*.csv'))
+          # Get ALL CSVs (including new ones)
+          csv_files = list(Path('data/raw').glob('*.csv'))
+          csv_files = [f for f in csv_files if 'apify_unprocessed' not in f.name]  # Exclude output file
+          
           print(f'Found {len(csv_files)} CSV files')
           
           dfs = []
@@ -81,11 +86,14 @@ jobs:
           df_merged = df_merged.drop_duplicates(subset=['reviewText'], keep='first')
           print(f'After dedup: {len(df_merged)} reviews')
           
+          print(f'Rating distribution:')
+          print(df_merged['reviewRating'].value_counts().sort_index())
+          
           df_merged.to_csv('data/raw/apify_unprocessed.csv', index=False)
           "
           
           ls -lh data/raw/apify_unprocessed.csv
-      
+            
       - name: Run preprocessing
         run: |
           cd Data-Pipeline/scripts
