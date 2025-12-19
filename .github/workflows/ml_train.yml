@@ -63,7 +63,9 @@ jobs:
           gsutil -m cp 'gs://us-central1-echo-ai-9c58f7b7-bucket/data/raw/dataset_restaurant-review-aggregator_*.csv' data/raw/
           gsutil cp 'gs://us-central1-echo-ai-9c58f7b7-bucket/data/raw/scraped_low_rated_letsee.csv' data/raw/
           gsutil cp 'gs://us-central1-echo-ai-9c58f7b7-bucket/data/raw/scraped_reviewsnew.csv' data/raw/
-          
+          gsutil cp 'gs://us-central1-echo-ai-9c58f7b7-bucket/data/raw/scraped_mediocre.csv' data/raw/
+          gsutil cp 'gs://us-central1-echo-ai-9c58f7b7-bucket/data/raw/scraped_mediocre_second.csv' data/raw/
+
           python -c "
           import pandas as pd
           from pathlib import Path
