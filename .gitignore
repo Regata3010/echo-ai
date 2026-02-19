@@ -32,6 +32,7 @@ model_pipeline/__pycache__
 model_pipeline/logs/
 model_pipeline/results
 model_pipeline/QualityControl/Model-Pipeline/results  
+model_pipeline/models
 
 # Results
 # model_pipeline/results/*.png
