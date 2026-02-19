@@ -1,8 +1,60 @@
-data/raw/*.csv
+# Data files
+# data/raw/*.csv
 data/processed/*.csv
+data/metrics/*.json
+*.dvc
+
+# Logs and databases
 logs/
-__pycache__/
-*.pyc
-.env
 airflow.db
 airflow-webserver.pid
+*.log
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.pytest_cache/
+.coverage
+
+# Environment
+.env
+*.env
+venv/
+aivenv/
+
+# Model artifacts
+# model_pipeline/models/*.pkl
+model_pipeline/mlruns/
+mlruns/
+model_pipeline/__pycache__
+model_pipeline/logs/
+model_pipeline/results
+model_pipeline/QualityControl/Model-Pipeline/results  
+
+# Results
+# model_pipeline/results/*.png
+# model_pipeline/results/*.json
+docs/bias_report.md
+
+# Firebase credentials
+firebase-key.json
+*-key.json
+
+# OS files
+.DS_Store
+.vscode/
+*.swp
+
+# Large data files
+reviews_from_serp.txt
+*.tar.gz
+
+# Temporary files
+/tmp/
+*.tmp
+
+
+#Tester
+testers/
