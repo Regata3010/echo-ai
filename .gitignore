@@ -26,15 +26,16 @@ aivenv/
 
 # Model artifacts
 # model_pipeline/models/*.pkl
+# Model artifacts
+model_pipeline/models/
+model_pipeline/models/bert-finetuned/
 model_pipeline/mlruns/
 mlruns/
 model_pipeline/__pycache__/
 model_pipeline/logs/
 model_pipeline/results/
-model_pipeline/QualityControl/Model-Pipeline/results/ 
-model_pipeline/models/
-model_pipeline/extra-data/
-
+model_pipeline/QualityControl/results/
+model_pipeline/extradata/
 # Results
 # model_pipeline/results/*.png
 # model_pipeline/results/*.json
