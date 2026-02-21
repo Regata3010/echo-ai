@@ -16,7 +16,6 @@ Restaurants receive hundreds of reviews daily across Google, Yelp, and TripAdvis
 
 ```mermaid
 flowchart TD
-    flowchart TD
     A([Raw Review Input\nstring or dict with metadata]) --> B
 
     B[Critical Issue Detection\nadvanced/critical_issues.py]
