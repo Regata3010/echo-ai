@@ -1,144 +1,188 @@
-# EchoAI Data Pipeline - MLOps Assignment
+ # EchoAI — Intelligent Restaurant Review Response System
 
-## Team Members
-- Abhisek Mallick
-- Arav Pandey
-- Srinivasan Raghavan
-- Nidhi Mallikarjun
-- Ragul Narayanan Magesh
+Automated pipeline that analyzes customer reviews and generates context-aware business responses. Handles sarcasm, mixed sentiment, health violations, and aspect-level feedback using a multi-stage NLP architecture.
 
-## Project Overview
-Data pipeline implementation for the EchoAI review processing system, demonstrating MLOps best practices including data versioning (DVC), pipeline orchestration (Airflow DAG), bias detection, and anomaly detection.
+**Live Demo:** [link coming soon]
 
-## Repository Structure
+---
+
+## Problem
+
+Restaurants receive hundreds of reviews daily across Google, Yelp, and TripAdvisor. Responding to all of them manually is not scalable, but generic auto-responses damage customer trust. EchoAI generates responses that read like a human wrote them — addressing specific complaints, acknowledging what worked, and escalating health or safety issues to management automatically.
+
+---
+
+## Pipeline Architecture
+
+```mermaid
+flowchart TD
+    flowchart TD
+    A([Raw Review Input\nstring or dict with metadata]) --> B
+
+    B[Critical Issue Detection\nadvanced/critical_issues.py]
+    B -->|health violation / safety / discrimination| C1([Sentiment forced to TERRIBLE\nUrgent response triggered])
+    B -->|no critical issue| C
+
+    C[BERT Sentiment Classification\nsentiment/bert_model.py\nfine-tuned · 72% balanced accuracy]
+    C --> D
+
+    D[Sarcasm Detection\nadvanced/sarcasm_detector.py\nhelinivan/english-sarcasm-detector]
+    D -->|sarcasm detected| D1([Sentiment corrected\npositive → negative])
+    D -->|no sarcasm| E
+    D1 --> E
+
+    E[Clause-Level Aspect Scoring\nAspectSA/bert_absa.py + hybrid_absa.py\ndistilbert-sst2 per clause]
+    E --> E1[food]
+    E --> E2[service]
+    E --> E3[ambiance]
+    E --> E4[price]
+    E --> E5[cleanliness]
+    E1 & E2 & E3 & E4 & E5 --> F
+
+    F[Smart Response Generation\nresponse_generator.py]
+    F -->|mixed sentiment| F1([Aspect-aware response\naddresses each aspect individually])
+    F -->|critical issue| F2([Urgent escalation response\nmanager contact])
+    F -->|simple sentiment| F3([Template response])
+
+    F1 & F2 & F3 --> G
+
+    G([Structured Output\nsentiment · confidence · aspect_sentiments\nhas_mixed_sentiment · critical_issues\nsarcasm_analysis · generated_response])
+
+    style A fill:#6366f1,color:#fff
+    style G fill:#374151,color:#fff
+    style C1 fill:#dc2626,color:#fff
+    style D1 fill:#f59e0b,color:#fff
+    style F1 fill:#059669,color:#fff
+    style F2 fill:#dc2626,color:#fff
+    style F3 fill:#0891b2,color:#fff
+```
+
+---
+
+## Example Output
+
+**Input**
+
+```
+"Best pizza I've ever had, but the waiter was incredibly rude and ruined the entire experience."
+```
+
+**Output**
+
+```json
+{
+  "sentiment": "neutral",
+  "confidence": 0.89,
+  "has_mixed_sentiment": true,
+  "aspect_sentiments": {
+    "food": { "sentiment": "positive", "score": 0.98 },
+    "service": { "sentiment": "negative", "score": -0.97 }
+  },
+  "generated_response": "Thank you for sharing your experience. We are particularly concerned about the service issues you mentioned and will address them immediately. We are glad you appreciated our food. We value your feedback and will use it to improve."
+}
+```
+
+---
+
+## Tech Stack
+
+| Layer | Technology |
+|---|---|
+| Overall Sentiment | Fine-tuned BERT (`bert-base-uncased`) |
+| Aspect Scoring | DistilBERT SST-2 (`distilbert-base-uncased-finetuned-sst-2-english`) |
+| Sarcasm Detection | `helinivan/english-sarcasm-detector` |
+| Clause Splitting | spaCy `en_core_web_sm` |
+| UI | Streamlit |
+| CI/CD | GitHub Actions |
+| Container | Docker |
+| Cloud | GCP Cloud Run |
+| Model Registry | GCS |
+| Experiment Tracking | MLflow |
+
+---
+
+## Performance
+
+| Metric | Value |
+|---|---|
+| BERT balanced accuracy | 72% |
+| Edge case test suite | 9/10 |
+| Aspects tracked | 5 (food, service, ambiance, price, cleanliness) |
+| Sentiment classes | 5 (terrible, negative, neutral, positive, amazing) |
+
+---
+
+## Project Structure
+
 ```
 echo-ai/
+├── model_pipeline/
+│   ├── enhanced_inference_pipeline.py  # Main pipeline entry point
+│   ├── response_generator.py           # Aspect-aware response templates
+│   ├── config.py                       # Centralized path config
+│   ├── finaletester.py                 # Edge case test suite
+│   ├── AspectSA/
+│   │   ├── bert_absa.py                # Clause-level aspect scoring
+│   │   └── hybrid_absa.py              # Rule-based + BERT hybrid
+│   ├── advanced/
+│   │   ├── sarcasm_detector.py         # Sarcasm detection + correction
+│   │   └── critical_issues.py          # Health/safety issue detection
+│   ├── sentiment/
+│   │   └── bert_model.py               # Fine-tuned BERT classifier
+│   └── models/                         # Trained model artifacts (GCS)
 ├── Data-Pipeline/
-│   ├── dags/                 # Airflow DAG definitions
-│   │   └── review_pipeline_dag.py
-│   ├── scripts/              # Pipeline modules
-│   │   ├── generate_data.py
-│   │   ├── data_acquisition.py
-│   │   ├── preprocessing.py
-│   │   ├── feature_engineering.py
-│   │   ├── validation.py
-│   │   ├── bias_detection.py
-│   │   └── anomaly_detection.py
-│   ├── tests/                # Unit tests
-│   │   ├── test_preprocessing.py
-│   │   ├── test_validation.py
-│   │   └── test_edge_cases.py
-│   └── configs/              # Configuration files
-├── data/
-│   ├── raw/                  # Raw data (DVC tracked)
-│   ├── processed/            # Processed data (DVC tracked)
-│   └── metrics/              # Validation metrics
-├── docs/                     # Documentation and reports
-├── run_pipeline.py           # Alternative pipeline orchestrator
-├── dvc.yaml                  # DVC pipeline configuration
-└── requirements.txt          # Python dependencies
+│   └── scripts/                        # Preprocessing, feature engineering, validation
+├── app.py                              # Streamlit UI
+├── Dockerfile                          # Cloud Run container
+├── requirements-streamlit.txt
+└── .github/workflows/
+    ├── ml_train.yml                    # Training + validation + bias detection
+    └── deploy_cloudrun.yml             # Streamlit deployment
 ```
 
-## Quick Start
+---
 
-### 1. Clone Repository
+## Local Setup
+
 ```bash
 git clone https://github.com/YOUR_USERNAME/echo-ai.git
 cd echo-ai
+pip install -r requirements-streamlit.txt
+python -m spacy download en_core_web_sm
 ```
 
-### 2. Install Dependencies
+Run the Streamlit app:
+
 ```bash
-pip install -r requirements.txt
+streamlit run app.py
 ```
 
-### 3. Get Data with DVC
+Run the edge case test suite:
+
 ```bash
-dvc pull  # Downloads tracked data files
+cd model_pipeline
+python finaletester.py
 ```
 
-### 4. Run Pipeline
-```bash
-# Option 1: Direct Python execution (recommended)
-python3 run_pipeline.py
+---
 
-# Option 2: Using Airflow (requires Python 3.9-3.11)
-airflow db init
-airflow dags trigger review_processing_pipeline
-```
+## MLOps Pipeline
 
-## Pipeline Components
+The GitHub Actions workflow runs on every push to `model_pipeline/` or `Data-Pipeline/`:
 
-### Data Acquisition
-- Generates 5000 synthetic reviews with realistic distributions
-- Simulates Google Reviews API data structure
+1. **Data preprocessing** — merges scraped CSVs, deduplicates, engineers features
+2. **Model training** — trains classifiers, tracks experiments with MLflow
+3. **Validation** — enforces minimum F1 threshold of 0.60
+4. **Enhanced inference** — runs `EnhancedInferencePipeline` on 100 reviews, outputs aspect breakdown
+5. **Bias detection** — checks fairness across rating slices
+6. **Model registry** — packages and uploads versioned artifacts to GCS
 
-### Preprocessing
-- Text cleaning and normalization
-- Missing value handling
-- Feature extraction (text length, word count)
+---
 
-### Validation
-- Schema validation
-- Data type checking
-- Range validation for ratings (1-5)
-- Missing value detection
+## Key Engineering Decisions
 
-### Bias Detection
-- Rating distribution analysis
-- Category-wise bias detection
-- Text length correlation analysis
-- Generates bias report in `docs/bias_report.md`
+**Why critical issue detection runs first** — a review containing a health violation should always generate an urgent response regardless of overall sentiment. Running BERT first would allow a review like "Found a hair in my salad, otherwise the food was decent" to be classified as neutral and receive a generic thank-you response.
 
-### Anomaly Detection
-- Outlier detection using IQR and Z-score methods
-- Duplicate detection
-- Suspicious pattern identification
-- Alert generation for critical anomalies
+**Why aspect scoring is clause-level, not full-review** — "Best pizza I've ever had but the waiter was incredibly rude" scores food as negative if scored against the full text. Splitting on contrast conjunctions (but, however, although) before scoring isolates each clause to its relevant aspect.
 
-## Data Versioning with DVC
-```bash
-# Track new data files
-dvc add data/raw/synthetic_reviews.csv
-
-# Push to remote storage
-dvc push
-
-# Pull latest data version
-dvc pull
-```
-
-## Testing
-```bash
-# Run all tests
-pytest Data-Pipeline/tests/ -v
-
-# Run specific test module
-python3 Data-Pipeline/tests/test_preprocessing.py
-```
-
-## Evaluation Criteria Met
-- ✅ Proper Documentation
-- ✅ Modular Syntax and Code
-- ✅ Pipeline Orchestration (Airflow DAG)
-- ✅ Tracking and Logging
-- ✅ Data Version Control (DVC)
-- ✅ Schema and Statistics Generation
-- ✅ Anomaly Detection and Alerts
-- ✅ Bias Detection and Mitigation
-- ✅ Test Modules
-- ✅ Reproducibility
-- ✅ Error Handling
-
-## Known Issues
-- Airflow requires Python 3.9-3.11. For Python 3.13, use `run_pipeline.py` as alternative orchestrator.
-- DVC remote storage requires configuration for team collaboration.
-
-## Future Enhancements
-- Integration with real Google Reviews API
-- Advanced NLP features for sentiment analysis
-- Real-time streaming with Apache Kafka
-- Model training pipeline integration
-
-## Contact
-For questions about this pipeline, please contact the team through the GitHub repository issues.
+**Why sarcasm detection sits between BERT and ABSA** — BERT misclassifies obvious sarcasm like "Oh great, cold food again" as positive. Correcting sentiment before aspect scoring prevents the wrong polarity from propagating into the response generator.
