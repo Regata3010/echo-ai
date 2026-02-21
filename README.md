@@ -16,21 +16,21 @@ Restaurants receive hundreds of reviews daily across Google, Yelp, and TripAdvis
 
 ```mermaid
 flowchart TD
-    A([Raw Review Input\nstring or dict with metadata]) --> B
+    A([Raw Review Input<br/>string or dict with metadata]) --> B
 
-    B[Critical Issue Detection\nadvanced/critical_issues.py]
-    B -->|health violation / safety / discrimination| C1([Sentiment forced to TERRIBLE\nUrgent response triggered])
+    B[Critical Issue Detection<br/>advanced/critical_issues.py]
+    B -->|health violation / safety / discrimination| C1([Sentiment forced to TERRIBLE<br/>Urgent response triggered])
     B -->|no critical issue| C
 
-    C[BERT Sentiment Classification\nsentiment/bert_model.py\nfine-tuned · 72% balanced accuracy]
+    C[BERT Sentiment Classification<br/>sentiment/bert_model.py<br/>fine-tuned · 72% balanced accuracy]
     C --> D
 
-    D[Sarcasm Detection\nadvanced/sarcasm_detector.py\nhelinivan/english-sarcasm-detector]
-    D -->|sarcasm detected| D1([Sentiment corrected\npositive → negative])
+    D[Sarcasm Detection<br/>advanced/sarcasm_detector.py<br/>helinivan/english-sarcasm-detector]
+    D -->|sarcasm detected| D1([Sentiment corrected<br/>positive → negative])
     D -->|no sarcasm| E
     D1 --> E
 
-    E[Clause-Level Aspect Scoring\nAspectSA/bert_absa.py + hybrid_absa.py\ndistilbert-sst2 per clause]
+    E[Clause-Level Aspect Scoring<br/>AspectSA/bert_absa.py + hybrid_absa.py<br/>distilbert-sst2 per clause]
     E --> E1[food]
     E --> E2[service]
     E --> E3[ambiance]
@@ -38,14 +38,14 @@ flowchart TD
     E --> E5[cleanliness]
     E1 & E2 & E3 & E4 & E5 --> F
 
-    F[Smart Response Generation\nresponse_generator.py]
-    F -->|mixed sentiment| F1([Aspect-aware response\naddresses each aspect individually])
-    F -->|critical issue| F2([Urgent escalation response\nmanager contact])
+    F[Smart Response Generation<br/>response_generator.py]
+    F -->|mixed sentiment| F1([Aspect-aware response<br/>addresses each aspect individually])
+    F -->|critical issue| F2([Urgent escalation response<br/>manager contact])
     F -->|simple sentiment| F3([Template response])
 
     F1 & F2 & F3 --> G
 
-    G([Structured Output\nsentiment · confidence · aspect_sentiments\nhas_mixed_sentiment · critical_issues\nsarcasm_analysis · generated_response])
+    G([Structured Output<br/>sentiment · confidence · aspect_sentiments<br/>has_mixed_sentiment · critical_issues<br/>sarcasm_analysis · generated_response])
 
     style A fill:#6366f1,color:#fff
     style G fill:#374151,color:#fff
