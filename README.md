@@ -60,26 +60,41 @@ flowchart TD
 
 ## Example Output
 
-**Input**
+### Screenshots
 
-```
-"Best pizza I've ever had, but the waiter was incredibly rude and ruined the entire experience."
-```
+![Review1-EchoAI Response](screenshots/Review1.png)
+![Review2-EchoAI Response](screenshots/Review2.png)
+![Review3-EchoAI Response](screenshots/Review3.png)
 
-**Output**
-
+<details>
+<summary>View raw JSON output</summary>
 ```json
-{
-  "sentiment": "neutral",
-  "confidence": 0.89,
-  "has_mixed_sentiment": true,
-  "aspect_sentiments": {
-    "food": { "sentiment": "positive", "score": 0.98 },
-    "service": { "sentiment": "negative", "score": -0.97 }
+[
+  {
+    "timestamp": "2026-02-21 22:06:10",
+    "review": "Service was slow, food was cold, place was dirty, and prices are outrageous. Complete disaster of a restaurant.",
+    "sentiment": "terrible",
+    "confidence": 0.832,
+    "response": "We are extremely concerned about your experience and take these issues very seriously. Please contact our management team via the contact form so we can address this situation personally and make it right."
   },
-  "generated_response": "Thank you for sharing your experience. We are particularly concerned about the service issues you mentioned and will address them immediately. We are glad you appreciated our food. We value your feedback and will use it to improve."
-}
+  {
+    "timestamp": "2026-02-21 22:03:29",
+    "review": "Found a hair in my salad. Otherwise the food was decent and the place looked clean enough.",
+    "sentiment": "terrible",
+    "confidence": 0.859,
+    "response": "We are extremely concerned about your experience and take these issues very seriously. The health and safety matter you mentioned is unacceptable and requires immediate investigation. Please contact our management team via the contact form so we can address this situation personally and make it right."
+  },
+  {
+    "timestamp": "2026-02-21 21:39:55",
+    "review": "Oh fantastic, another 45 minute wait for cold pasta. The dessert was genuinely amazing though, tiramisu was the best I've had in years. But I've never been treated so rudely by a waiter in my life.",
+    "sentiment": "negative",
+    "confidence": 0.654,
+    "response": "We sincerely apologize for your experience. We are particularly concerned about the service issues you mentioned and will address them immediately. We are glad you appreciated our food. Please contact our manager directly so we can make this right and restore your faith in our service."
+  }
+]
 ```
+
+</details>
 
 ---
 
